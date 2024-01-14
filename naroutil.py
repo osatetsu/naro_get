@@ -1,20 +1,6 @@
 #! python
 #
-# 小説を読もうから、各話を html でダウンロードする。
-# 横書き前提の小説が存在すること、および、ルビがまっとうに見えることから、html 形式としている。
-# なお、text 形式の場合、ルビが《 》で奇妙な場所へ挿入されることもあった。
-#
-# ダウンロードしたファイルの結合は、別のツール(モジュール)としている。
-# 結合自体はファイルが存在すれば、並行して動作可能であるため。
-#
-# 小説を読もう web site における http header に、'Last-Modified' は存在しない。
-# よって、更新された部分だけを得ようとする場合、手間をかける必要がある。
-# タイトルページの各話に対応する更新日時を得てタイムスタンプを比較するか、あるいは、無視するか。
-# 一旦、更新日時は無視し、追加された話数だけダウンロードするようにしたい。
-#
-# 各話のダウンロードは、少し時間を空けて行う。
-# 小説を読もうサイトへ負荷をかけることは本意ではない。
-#
+
 
 import os
 import argparse
@@ -26,6 +12,18 @@ import logging.config
 from lxml import html
 
 logger = None
+
+def get_title_text(prefix, n_code):
+    html_file = os.path.join(prefix, n_code, 'index.html')
+
+    html_content = ''
+    with open(html_file, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+
+    xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
+
+    title_obj = xroot.find_class('novel_title')
+    return title_obj[0].text
 
 def get_subtitle_refs(prefix, n_code):
     """
@@ -40,11 +38,6 @@ def get_subtitle_refs(prefix, n_code):
 
     xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
 
-    # Title.
-#    title_obj = xroot.find_class('novel_title')
-#    title_text = title_obj[0].text
-#    print(title_text)
-
     # Subtitles and link.
     subtitles = []
     subtitle_obj = xroot.find_class('subtitle')
@@ -57,6 +50,18 @@ def get_subtitle_refs(prefix, n_code):
 
     return subtitles
 
+def get_body_of_part(html_file):
+    with open(html_file, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+
+    xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
+
+    """
+    <div id="novel_honbun" class="novel_view" style="line-height: 180%; font-size: 100%;">
+    """
+    obj = xroot.get_element_by_id('novel_honbun')
+    return html.tostring(obj, encoding="unicode")
+
 def make_subdir_for_subtitle(download_path, subdir):
     p = os.path.join(download_path, subdir)
     try:
@@ -64,13 +69,25 @@ def make_subdir_for_subtitle(download_path, subdir):
     except OSError as e:
         logger.error('os.makedirs({}). {}'.format(p, e.strerror))
 
+def make_subdir_for_output(download_path, subdir):
+    p = os.path.join(download_path, '{}.output'.format(subdir))
+    try:
+        os.makedirs(p, exist_ok=True)
+        return p
+    except OSError as e:
+        logger.error('os.makedirs({}). {}'.format(p, e.strerror))
+        return None
+
+def make_html_filename(number_of_part):
+    return '{:06d}.html'.format(number_of_part)
+
 def make_download_filename(download_path, subdir, number_of_part):
     """
     Make filename for subtitles.
     Subtitles format likes are '/n2749hf/12/'.
     And, concatenates to {download_path}/{subdir}/000012.html.
     """
-    return os.path.join(download_path, subdir, '{:06d}.html'.format(number_of_part))
+    return os.path.join(download_path, subdir, make_html_filename(number_of_part))
 
 def download_subs(download_path, subdir, base, subtitles):
     for s in subtitles:
@@ -94,6 +111,9 @@ def download_subs(download_path, subdir, base, subtitles):
         except OSError as err:
             logger.error(err.strerror)
         time.sleep(random.uniform(0.5, 1.5))
+
+def set_logger(newlogger):
+    logger = newlogger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

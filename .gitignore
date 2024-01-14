@@ -7,3 +7,4 @@ download/
 work/
 temp/
 tmp/
+__pycache__/
