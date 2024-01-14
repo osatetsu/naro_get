@@ -1,0 +1,9 @@
+*~
+*.bak
+*.old
+*.orig
+*.pyc
+download/
+work/
+temp/
+tmp/
