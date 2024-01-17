@@ -2,9 +2,7 @@
 #
 # 各話個別のhtmlファイルを結合する。
 #
-# TODO:
-#   * おそらく単話に未対応。現状は「章」が必ず存在する前提で作っている。
-#
+
 
 import os
 import argparse
@@ -56,12 +54,17 @@ def write_toc_html(filehandler, toc_list):
     toc_list:
         Ordered list has dictionary element.
             text: text name.
-            type: 'c' is a chapter. 'p' is a part.
+            type: 'no_c' is chapter-less. 'c' is a chapter. 'p' is a part.
             anchor_id: reference to.
     """
     filehandler.write("<p>目次</p>")
     was_part = False
     for elem in toc_list:
+        if elem['type'] == 'no_c':
+            if was_part:
+                filehandler.write("</ol>\n")
+                was_part = False
+            filehandler.write("<ol>\n")
         if elem['type'] == 'c':
             if was_part:
                 filehandler.write("</ol>\n")
@@ -107,7 +110,7 @@ def make_combined_chapter(download_path, n_code, need_toc):
 
     part_files = []
     chapter_number = 0
-    chapter_title = ''
+    chapter_title = None
     header_list = []
     toc_list = []
     body_list = []
@@ -117,7 +120,7 @@ def make_combined_chapter(download_path, n_code, need_toc):
         part_obj = naroutil.parse_part_page(os.path.join(download_path, n_code, html_file))
 
         # Chapter
-        if chapter_title != part_obj['chapter_title']:
+        if chapter_title is None or chapter_title != part_obj['chapter_title']:
             output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, chapter_number))
             if len(body_list) > 0:
                 f = open(output_filepath, 'w', encoding='utf-8')
@@ -129,16 +132,22 @@ def make_combined_chapter(download_path, n_code, need_toc):
 
             chapter_number += 1
             chapter_title = part_obj['chapter_title']
-            title = f'{title_text} / {chapter_title}'
+            if len(chapter_title) == 0:
+                title = f'{title_text}'
+            else:
+                title = f'{title_text} / {chapter_title}'
             html_header = html_header_template.substitute(novel_title=title)
 
             header_list.append(html_header)
 
-            chapter_anchor = f'c{chapter_number}'
-            chapter_header = chapter_header_template.substitute(anchor_id=chapter_anchor, chapter=chapter_title)
-            
-            body_list.append(chapter_header)
-            toc_list.append(make_toc_elem(chapter_title, 'c', chapter_anchor))
+            if len(chapter_title) == 0:
+                toc_list.append(make_toc_elem('', 'no_c', ''))
+            else:
+                chapter_anchor = f'c{chapter_number}'
+                chapter_header = chapter_header_template.substitute(anchor_id=chapter_anchor, chapter=chapter_title)
+                
+                body_list.append(chapter_header)
+                toc_list.append(make_toc_elem(chapter_title, 'c', chapter_anchor))
             part_files.append(output_filepath)
 
         # Part / Subtitle

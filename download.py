@@ -15,6 +15,7 @@
 # 各話のダウンロードは、少し時間を空けて行う。
 #
 
+import os
 import argparse
 from logging import getLogger, DEBUG, INFO, ERROR
 import logging.config
@@ -36,6 +37,11 @@ if __name__ == "__main__":
     logger.debug('n_code: {}'.format(args.n_code))
 
     baseurl = 'https://ncode.syosetu.com/'
+    try:
+        os.makedirs(os.path.join(args.download_path, args.n_code), exist_ok=True)
+    except OSError as err:
+        logger.error('makedirs: OSError: {}', err.strerror)
+
     if naroutil.download_main(args.download_path, args.n_code, baseurl) == 0:
         subtitles = naroutil.get_subtitle_refs(prefix=args.download_path, n_code=args.n_code)
         naroutil.make_subdir_for_subtitle(args.download_path, args.n_code)

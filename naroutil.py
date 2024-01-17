@@ -130,7 +130,10 @@ def parse_part_page(html_file):
     result = {}
 
     chapter_obj = xroot.find_class('chapter_title')
-    result['chapter_title'] = chapter_obj[0].text
+    if chapter_obj is None or len(chapter_obj) == 0:
+        result['chapter_title'] = ''
+    else:
+        result['chapter_title'] = chapter_obj[0].text
 
     subtitle_obj = xroot.find_class('novel_subtitle')
     result['subtitle'] = subtitle_obj[0].text
@@ -176,6 +179,8 @@ def download_main(download_path, subdir, base):
     download_filepath = os.path.join(download_path, subdir, 'index.html')
 
     url = make_url(base, subdir)
+    if not url.endswith('/'):
+        url += '/'
     logger.debug('URL: {}'.format(url))
     req = urllib.request.Request(url)
     try:
@@ -185,11 +190,11 @@ def download_main(download_path, subdir, base):
                 f.write(bytes(body))
             ret_val = 0
     except urllib.error.HTTPError as err:
-        logger.error(err.code)
+        logger.error('download_main: HTTPError, {}'.format(err.code))
     except urllib.error.URLError as err:
-        logger.error(err.reason)
+        logger.error('download_main: URLError, {}'.format(err.reason))
     except OSError as err:
-        logger.error(err.strerror)
+        logger.error('download_main: OSError, {}'.format(err.strerror))
 
     return ret_val
 
@@ -201,6 +206,8 @@ def download_subs(download_path, subdir, base, subtitles):
             continue
         logger.info('Next download: {}, {}'.format(s['number'], s['subtitle']))
         url = make_url(base, s['code'], str(s['number']))
+        if not url.endswith('/'):
+            url += '/'
         logger.debug('URL: {}'.format(url))
         req = urllib.request.Request(url)
         try:
