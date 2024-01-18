@@ -1,8 +1,12 @@
 #! python
 #
 # 各話個別のhtmlファイルを結合する。
+# 結合単位は、既定で『章』単位としている。
+# オプション指定で、章単位の代わりに文字数単位とすることも可能。
 #
-
+# * TODO: 挿絵をどうするか？
+# * TODO: TOML か何かで、Nコード毎に、どこで区切るかなどの設定をしたい → 上位スクリプトを作るのが良いか。
+#
 
 import os
 import argparse
@@ -57,6 +61,9 @@ def write_toc_html(filehandler, toc_list):
             type: 'no_c' is chapter-less. 'c' is a chapter. 'p' is a part.
             anchor_id: reference to.
     """
+    if toc_list is None or len(toc_list) == 0:
+        return
+
     filehandler.write("<p>目次</p>")
     was_part = False
     for elem in toc_list:
@@ -91,11 +98,34 @@ def write_html(filehandler, title_page, header_list, toc_list, body_list):
     if enabled_complete_html:
         filehandler.write(html_footer)
 
-def make_combined_chapter(download_path, n_code, need_toc):
+def is_chapter_end(new_chapter_title, prev_chapter_title, char_count, char_count_max):
+    """
+    章の区切り(出力ファイルの切り替え契機)であれば、True を返す。
+    params:
+        new_chapter_title: 章の見出し。
+        prev_chapter_title: 前回の章の見出し。
+        char_count: 章(区切り単位)の中の文字数。
+        char_count_max: 区切り単位内と判断する最大文字数。0 なら、文字数では区切らない。
+    """
+
+    is_end = False
+    if prev_chapter_title is None:
+        # Maybe, first time.
+        is_end = True
+    elif char_count_max > 0:
+        if char_count >= char_count_max:
+            is_end = True
+    else:
+        if prev_chapter_title != new_chapter_title:
+            is_end = True
+    
+    return is_end
+
+def make_combined_chapter(download_path, n_code, need_toc, cut_count):
     """
     ひとつの章毎に1ファイル作る。
-    pandoc で epub を作ろうとしたが、html からでは TOC が作成されず、全ファイルが1つにまとめられてしまう。
-    従って、分割するのであれば、章毎に独立した html を作ることが良さそうだ。
+    もし、cut_count が 0 より大きい場合は、章ではなく、文字数がその値を越えた話で区切り、ファイルを作っていく。
+    あくまでファイルを区切る単位は、『話(part)』である。
     """
     main_info = naroutil.parse_main_page(download_path, n_code)
     logger.debug('title: {}'.format(main_info['title']))
@@ -114,16 +144,19 @@ def make_combined_chapter(download_path, n_code, need_toc):
     header_list = []
     toc_list = []
     body_list = []
+    char_count = 0
     f = None # Output Filehandler.
     for s in subtitles:
         html_file = naroutil.make_html_filename(s['number'])
         part_obj = naroutil.parse_part_page(os.path.join(download_path, n_code, html_file))
 
         # Chapter
-        if chapter_title is None or chapter_title != part_obj['chapter_title']:
+        if is_chapter_end(part_obj['chapter_title'], chapter_title, char_count, cut_count):
             output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, chapter_number))
             if len(body_list) > 0:
                 f = open(output_filepath, 'w', encoding='utf-8')
+                if not need_toc:
+                    toc_list = []
                 write_html(f, title_page, header_list, toc_list, body_list)
                 logger.info(f'Write to {output_filepath}')
                 header_list = []
@@ -149,6 +182,7 @@ def make_combined_chapter(download_path, n_code, need_toc):
                 body_list.append(chapter_header)
                 toc_list.append(make_toc_elem(chapter_title, 'c', chapter_anchor))
             part_files.append(output_filepath)
+            char_count = 0
 
         # Part / Subtitle
         part_anchor = 'p{}'.format(s['number'])
@@ -166,11 +200,14 @@ def make_combined_chapter(download_path, n_code, need_toc):
         else:
             clean_body = body
 
+        char_count += len(clean_body)
         body_list.append(clean_body)
  
     if len(body_list) > 0:
         output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, chapter_number))
         f = open(output_filepath, 'w', encoding='utf-8')
+        if not need_toc:
+            toc_list = []
         write_html(f, title_page, header_list, toc_list, body_list)
         logger.info(f'Write to {output_filepath}')
         header_list = []
@@ -181,7 +218,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--download_path", type=str, help="Download path.", default='download')
     parser.add_argument("--toc", type=bool, help="Make TOC.", default=True)
-    parser.add_argument("n_code", type=str, help="Codes starting with N assigned to novels on syosetu.com")
+    parser.add_argument("--cut_char_count", type=int, help="Cut count. If 0, does not cut by character-count.", default=0)
+    parser.add_argument("n_code", type=str, help="Codes starting with 'n' each assigned novels. That you can find syosetu.com.")
     args = parser.parse_args()
 
     logging.config.fileConfig('logging_settings.ini')
@@ -190,4 +228,4 @@ if __name__ == "__main__":
 
     logger.debug('n_code: {}'.format(args.n_code))
 
-    make_combined_chapter(args.download_path, args.n_code, args.toc)
+    make_combined_chapter(args.download_path, args.n_code, args.toc, args.cut_char_count)

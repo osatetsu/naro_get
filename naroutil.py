@@ -23,6 +23,8 @@ logger = None
 def make_url(base_url, *uris, **params):
     """
     see https://stackoverflow.com/questions/15799696/how-to-build-urls-in-python-with-the-standard-library
+    uris の最後尾を '/' で終わらせたい場合は、この関数を抜けた後に手動で付与されたい。
+    params は省略可能である。存在するなら、GET 時のクエリーを構成する。
     """
     url = base_url.rstrip('/')
     for uri in uris:
@@ -216,11 +218,11 @@ def download_subs(download_path, subdir, base, subtitles):
                 with open(filename, 'wb') as f:
                     f.write(bytes(body))
         except urllib.error.HTTPError as err:
-            logger.error(err.code)
+            logger.error('download_subs: HTTPError, {}'.format(err.code))
         except urllib.error.URLError as err:
-            logger.error(err.reason)
+            logger.error('download_subs: URLError, {}'.format(err.reason))
         except OSError as err:
-            logger.error(err.strerror)
+            logger.error('download_subs: OSError, {}'.format(err.strerror))
         time.sleep(random.uniform(0.5, 1.5))
 
 def set_logger(newlogger):
