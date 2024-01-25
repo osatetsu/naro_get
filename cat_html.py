@@ -98,30 +98,7 @@ def write_html(filehandler, title_page, header_list, toc_list, body_list):
     if enabled_complete_html:
         filehandler.write(html_footer)
 
-def is_chapter_end(new_chapter_title, prev_chapter_title, char_count, char_count_max):
-    """
-    章の区切り(出力ファイルの切り替え契機)であれば、True を返す。
-    params:
-        new_chapter_title: 章の見出し。
-        prev_chapter_title: 前回の章の見出し。
-        char_count: 章(区切り単位)の中の文字数。
-        char_count_max: 区切り単位内と判断する最大文字数。0 なら、文字数では区切らない。
-    """
-
-    is_end = False
-    if prev_chapter_title is None:
-        # Maybe, first time.
-        is_end = True
-    elif char_count_max > 0:
-        if char_count >= char_count_max:
-            is_end = True
-    else:
-        if prev_chapter_title != new_chapter_title:
-            is_end = True
-    
-    return is_end
-
-def make_combined_chapter(download_path, n_code, need_toc, cut_count):
+def make_combined_chapter(download_path, n_code, need_toc, cut_chapter, cut_count):
     """
     ひとつの章毎に1ファイル作る。
     もし、cut_count が 0 より大きい場合は、章ではなく、文字数がその値を越えた話で区切り、ファイルを作っていく。
@@ -138,59 +115,17 @@ def make_combined_chapter(download_path, n_code, need_toc, cut_count):
     subtitles = main_info['subtitles']
     output_dir = naroutil.make_subdir_for_output(download_path, n_code)
 
-    part_files = []
-    chapter_number = 0
-    chapter_title = None
-    header_list = []
-    toc_list = []
-    body_list = []
-    char_count = 0
-    f = None # Output Filehandler.
+    contents = []
+
+    logger.info('Start parse.')
     for s in subtitles:
         html_file = naroutil.make_html_filename(s['number'])
         part_obj = naroutil.parse_part_page(os.path.join(download_path, n_code, html_file))
 
-        # Chapter
-        if is_chapter_end(part_obj['chapter_title'], chapter_title, char_count, cut_count):
-            output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, chapter_number))
-            if len(body_list) > 0:
-                f = open(output_filepath, 'w', encoding='utf-8')
-                if not need_toc:
-                    toc_list = []
-                write_html(f, title_page, header_list, toc_list, body_list)
-                logger.info(f'Write to {output_filepath}')
-                header_list = []
-                toc_list = []
-                body_list = []
+        chapter_title = part_obj['chapter_title']
 
-            chapter_number += 1
-            chapter_title = part_obj['chapter_title']
-            if len(chapter_title) == 0:
-                title = f'{title_text}'
-            else:
-                title = f'{title_text} / {chapter_title}'
-            html_header = html_header_template.substitute(novel_title=title)
+        part_title = part_obj['subtitle']
 
-            header_list.append(html_header)
-
-            if len(chapter_title) == 0:
-                toc_list.append(make_toc_elem('', 'no_c', ''))
-            else:
-                chapter_anchor = f'c{chapter_number}'
-                chapter_header = chapter_header_template.substitute(anchor_id=chapter_anchor, chapter=chapter_title)
-                
-                body_list.append(chapter_header)
-                toc_list.append(make_toc_elem(chapter_title, 'c', chapter_anchor))
-            part_files.append(output_filepath)
-            char_count = 0
-
-        # Part / Subtitle
-        part_anchor = 'p{}'.format(s['number'])
-        chapter_part = chapter_part_template.substitute(anchor_id=part_anchor, part=part_obj['subtitle'])
-        body_list.append(chapter_part)
-        toc_list.append(make_toc_elem(part_obj['subtitle'], 'p', part_anchor))
-
-        # Body / Content
         body = part_obj['content']
         clean_body = None
         if enabled_remove_br:
@@ -200,11 +135,96 @@ def make_combined_chapter(download_path, n_code, need_toc, cut_count):
         else:
             clean_body = body
 
+        contents.append({
+            'chapter': chapter_title,
+            'part': part_title,
+            'part_number': s['number'],
+            'body': clean_body,
+        })
+    logger.info('End parse.')
+
+    output_number = 1
+    chapter_title = None
+    header_list = []
+    toc_list = []
+    body_list = []
+
+    chapter_total_number = 0
+    chapter_count = 0
+    char_count = 0
+    for c in contents:
+        # Chapter
+        is_changed_chapter = False
+        if chapter_title != c['chapter']:
+            chapter_title = c['chapter']
+#            logger.debug('*** {}, {}'.format(chapter_title, part_obj['chapter_title']))
+            chapter_count += 1
+            chapter_total_number += 1
+            is_changed_chapter = True
+
+        need_cut = False
+        # Does these output?
+        if cut_chapter > 0 and chapter_count > cut_chapter:
+            logger.debug(f'Cut chapter count. {chapter_count}/{cut_chapter}, total:{chapter_total_number}')
+            need_cut = True
+            chapter_count = 1
+
+        if cut_count > 0 and char_count > cut_count:
+            logger.debug(f'Cut character count. {char_count}/{cut_count}')
+            need_cut = True
+            char_count = 0
+
+        if need_cut:
+            title = f'{title_text}'
+            html_header = html_header_template.substitute(novel_title=title)
+
+            header_list.append(html_header)
+
+            output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, output_number))
+            if len(body_list) > 0:
+                f = open(output_filepath, 'w', encoding='utf-8')
+                if not need_toc:
+                    toc_list = []
+                write_html(f, title_page, header_list, toc_list, body_list)
+                logger.info('Write to {}'.format(output_filepath))
+                header_list = []
+                toc_list = []
+                body_list = []
+                output_number += 1
+
+        # Chapter.
+        if is_changed_chapter:
+            if len(chapter_title) == 0:
+                toc_list.append(make_toc_elem('', 'no_c', ''))
+                logger.debug(f'Add a chapter [Empty]: {chapter_total_number}')
+            else:
+                chapter_anchor = f'c{chapter_total_number}'
+                chapter_header = chapter_header_template.substitute(anchor_id=chapter_anchor, chapter=chapter_title)
+                body_list.append(chapter_header)
+                toc_list.append(make_toc_elem(chapter_title, 'c', chapter_anchor))
+                logger.debug(f'Add a chapter [1]: {chapter_total_number}, {chapter_title}')
+
+        # Part / Subtitle
+        part_anchor = 'p{}'.format(c['part_number'])
+        chapter_part = chapter_part_template.substitute(anchor_id=part_anchor, part=c['part'])
+        body_list.append(chapter_part)
+        toc_list.append(make_toc_elem(c['part'], 'p', part_anchor))
+
+        # Body / Content
+        body = c['body']
+        clean_body = None
+        if enabled_remove_br:
+            ### Remove empty lines that are only 'br' tags.
+            body2 = re.sub(br_line_pattern, '', body, count=0)
+            clean_body = re.sub(body_id_pattern, '', body2, count=0)
+        else:
+            clean_body = body
+
         char_count += len(clean_body)
         body_list.append(clean_body)
- 
+
     if len(body_list) > 0:
-        output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, chapter_number))
+        output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, output_number))
         f = open(output_filepath, 'w', encoding='utf-8')
         if not need_toc:
             toc_list = []
@@ -218,7 +238,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--download_path", type=str, help="Download path.", default='download')
     parser.add_argument("--toc", type=bool, help="Make TOC.", default=True)
-    parser.add_argument("--cut_char_count", type=int, help="Cut count. If 0, does not cut by character-count.", default=0)
+    parser.add_argument("--cut_chapter_count", type=int, help="Cut chapter count.", default=1)
+    parser.add_argument("--cut_char_count", type=int, help="Cut character count. If 0, does not cut by character-count.", default=0)
     parser.add_argument("n_code", type=str, help="Codes starting with 'n' each assigned novels. That you can find syosetu.com.")
     args = parser.parse_args()
 
@@ -228,4 +249,4 @@ if __name__ == "__main__":
 
     logger.debug('n_code: {}'.format(args.n_code))
 
-    make_combined_chapter(args.download_path, args.n_code, args.toc, args.cut_char_count)
+    make_combined_chapter(args.download_path, args.n_code, args.toc, args.cut_chapter_count, args.cut_char_count)
