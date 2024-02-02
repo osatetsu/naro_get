@@ -152,6 +152,10 @@ def make_combined_chapter(download_path, n_code, need_toc, cut_chapter, cut_coun
     chapter_total_number = 0
     chapter_count = 0
     char_count = 0
+
+    html_header = html_header_template.substitute(novel_title=title_text)
+    header_list.append(html_header)
+
     for c in contents:
         # Chapter
         is_changed_chapter = False
@@ -175,11 +179,6 @@ def make_combined_chapter(download_path, n_code, need_toc, cut_chapter, cut_coun
             char_count = 0
 
         if need_cut:
-            title = f'{title_text}'
-            html_header = html_header_template.substitute(novel_title=title)
-
-            header_list.append(html_header)
-
             output_filepath = os.path.join(output_dir, '{}_{}.html'.format(n_code, output_number))
             if len(body_list) > 0:
                 f = open(output_filepath, 'w', encoding='utf-8')
@@ -187,7 +186,6 @@ def make_combined_chapter(download_path, n_code, need_toc, cut_chapter, cut_coun
                     toc_list = []
                 write_html(f, title_page, header_list, toc_list, body_list)
                 logger.info('Write to {}'.format(output_filepath))
-                header_list = []
                 toc_list = []
                 body_list = []
                 output_number += 1
@@ -230,7 +228,6 @@ def make_combined_chapter(download_path, n_code, need_toc, cut_chapter, cut_coun
             toc_list = []
         write_html(f, title_page, header_list, toc_list, body_list)
         logger.info(f'Write to {output_filepath}')
-        header_list = []
         toc_list = []
         body_list = []
 
