@@ -40,8 +40,8 @@
  4. [Send to Kindle]() を使用し、結合した html ファイルを Kindle ライブラリへ追加してください。Amazon 側で変換処理がなされるため、少し時間がかかります。
  5. お手持ちの Kindle にて小説を読んでください。
 
-もし、[Send to Kindle]() にて変換に失敗するなど、不具合がありましたら Issue からご連絡ください。
-また、機能のついてのご要望も同様に Issue へお願いします。
+もし、[Send to Kindle]() にて変換に失敗するなど、不具合がありましたら [Issues](https://github.com/osatetsu/naro_get/issues) からご連絡ください。
+また、機能のついてのご要望も同様に Issues へお願いします。
 
 ## Tips
 
