@@ -41,8 +41,8 @@ title_page_template = Template("""
 chapter_header_template = Template("<h2 id=\"${anchor_id}\">${chapter}</h2>\n")
 chapter_part_template = Template("<hr />\n<h3 id=\"${anchor_id}\">${part}</h3>\n")
 
-br_line_pattern = '<p\s.*>\s*<br\s*/?>\s*</\s*p>\s*'
-body_id_pattern = ' id="L\d+"' ## e.g. <p id="L123">
+br_line_pattern = r'<p\s.*>\s*<br\s*/?>\s*</\s*p>\s*'
+body_id_pattern = r' id="L\d+"' ## e.g. <p id="L123">
 
 ### br(改行) 単体の行は削除するなら True
 enabled_remove_br = True
