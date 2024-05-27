@@ -17,6 +17,7 @@ import random
 from logging import getLogger, DEBUG, INFO, ERROR
 import logging.config
 from lxml import html
+import http.cookiejar
 
 logger = None
 
@@ -180,19 +181,28 @@ def download_main(download_path, subdir, base):
     ret_val = -1
     download_filepath = os.path.join(download_path, subdir, 'index.html')
 
+    cookie_jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+
     url = make_url(base, subdir)
     if not url.endswith('/'):
         url += '/'
     logger.debug('URL: {}'.format(url))
-    req = urllib.request.Request(url)
+#    req = urllib.request.Request(url)
     try:
-        with urllib.request.urlopen(req) as res:
-            body = res.read()
+#        with urllib.request.urlopen(req) as res:
+#            body = res.read()
+#            with open(download_filepath, 'wb') as f:
+#                f.write(bytes(body))
+        logger.info(f"open {url}")
+        response = opener.open(url)
+        data = response.read()
+        if data and len(data) > 0:
             with open(download_filepath, 'wb') as f:
-                f.write(bytes(body))
-            ret_val = 0
+                f.write(bytes(data.decode('utf-8')))
+                ret_val = 0
     except urllib.error.HTTPError as err:
-        logger.error('download_main: HTTPError, {}'.format(err.code))
+        logger.error('download_main: HTTPError, {} - {}'.format(err.code, err.reason))
     except urllib.error.URLError as err:
         logger.error('download_main: URLError, {}'.format(err.reason))
     except OSError as err:
