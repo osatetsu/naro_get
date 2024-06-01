@@ -46,3 +46,4 @@ if __name__ == "__main__":
         subtitles = naroutil.get_subtitle_refs(prefix=args.download_path, n_code=args.n_code)
         naroutil.make_subdir_for_subtitle(args.download_path, args.n_code)
         naroutil.download_subs(args.download_path, args.n_code, baseurl, subtitles)
+ 

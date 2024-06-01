@@ -10,14 +10,12 @@
 
 import os
 import argparse
-import urllib.request
-import urllib.parse
 import time
 import random
 from logging import getLogger, DEBUG, INFO, ERROR
 import logging.config
 from lxml import html
-import http.cookiejar
+import subprocess
 
 logger = None
 
@@ -52,23 +50,33 @@ def get_subtitle_refs(prefix, n_code):
     Get all subtitles from title page.
     """
     #html_file = 'download/n2749hf/index.html'
-    html_file = os.path.join(prefix, n_code, 'index.html')
-
-    html_content = ''
-    with open(html_file, 'r', encoding='utf-8') as f:
-        html_content = f.read()
-
-    xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
-
-    # Subtitles and link.
     subtitles = []
-    subtitle_obj = xroot.find_class('subtitle')
-    for dd in subtitle_obj:
-        for a in dd:
-            if a.get('href') is None:
-                continue
-            x = a.get('href').split('/')
-            subtitles.append({'code':x[1], 'number':int(x[2]), 'subtitle':a.text})
+
+    file_index = 0
+    while True:
+        file_index += 1
+        file_index_str = ''
+        if file_index >= 2:
+            file_index_str = str(file_index)
+        html_file = os.path.join(prefix, n_code, f'index{file_index_str}.html')
+
+        html_content = ''
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+        except OSError as e:
+            break
+
+        xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
+
+        # Subtitles and link.
+        subtitle_obj = xroot.find_class('subtitle')
+        for dd in subtitle_obj:
+            for a in dd:
+                if a.get('href') is None:
+                    continue
+                x = a.get('href').split('/')
+                subtitles.append({'code':x[1], 'number':int(x[2]), 'subtitle':a.text})
 
     return subtitles
 
@@ -79,32 +87,43 @@ def parse_main_page(download_path, n_code):
         subtitles:
         author:
     """
-    html_file = os.path.join(download_path, n_code, 'index.html')
-    html_content = ''
-    with open(html_file, 'r', encoding='utf-8') as f:
-        html_content = f.read()
-
-    xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
     result = {}
-
-    ### Title
-    title_obj = xroot.find_class('novel_title')
-    result['title'] = title_obj[0].text
-
-    ### Author
-    result['author'] = xroot.xpath('//*[@id="novel_color"]/div[2]/a')[0].text
-
-    ### Subtitles
     subtitles = []
-    subtitle_obj = xroot.find_class('subtitle')
-    for dd in subtitle_obj:
-        for a in dd:
-            if a.get('href') is None:
-                continue
-            x = a.get('href').split('/')
-            subtitles.append({'code':x[1], 'number':int(x[2]), 'subtitle':a.text})
-    result['subtitles'] = subtitles
+    file_index = 0
+    while True:
+        file_index += 1
+        file_index_str = ''
+        if file_index >= 2:
+            file_index_str = str(file_index)
 
+        html_file = os.path.join(download_path, n_code, f'index{file_index_str}.html')
+        html_content = ''
+        try:
+            with open(html_file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+        except OSError as e:
+            break
+
+        xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
+
+        if file_index <= 1:
+            ### Title
+            title_obj = xroot.find_class('novel_title')
+            result['title'] = title_obj[0].text
+
+            ### Author
+            result['author'] = xroot.xpath('//*[@id="novel_color"]/div[2]/a')[0].text
+
+        ### Subtitles
+        subtitle_obj = xroot.find_class('subtitle')
+        for dd in subtitle_obj:
+            for a in dd:
+                if a.get('href') is None:
+                    continue
+                x = a.get('href').split('/')
+                subtitles.append({'code':x[1], 'number':int(x[2]), 'subtitle':a.text})
+
+    result['subtitles'] = subtitles
     return result
 
 def get_body_of_part(html_file):
@@ -178,35 +197,36 @@ def make_download_filename(download_path, subdir, number_of_part):
     return os.path.join(download_path, subdir, make_html_filename(number_of_part))
 
 def download_main(download_path, subdir, base):
+    '''
+    '次へ' があるなら、リンクをたどってダウンロードしていく。
+    ダウンロードファイルは、index.html, index2.html, index3.html... としている。
+    '''
     ret_val = -1
+    file_index = 1
     download_filepath = os.path.join(download_path, subdir, 'index.html')
-
-    cookie_jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
 
     url = make_url(base, subdir)
     if not url.endswith('/'):
         url += '/'
     logger.debug('URL: {}'.format(url))
-#    req = urllib.request.Request(url)
-    try:
-#        with urllib.request.urlopen(req) as res:
-#            body = res.read()
-#            with open(download_filepath, 'wb') as f:
-#                f.write(bytes(body))
-        logger.info(f"open {url}")
-        response = opener.open(url)
-        data = response.read()
-        if data and len(data) > 0:
-            with open(download_filepath, 'wb') as f:
-                f.write(bytes(data.decode('utf-8')))
-                ret_val = 0
-    except urllib.error.HTTPError as err:
-        logger.error('download_main: HTTPError, {} - {}'.format(err.code, err.reason))
-    except urllib.error.URLError as err:
-        logger.error('download_main: URLError, {}'.format(err.reason))
-    except OSError as err:
-        logger.error('download_main: OSError, {}'.format(err.strerror))
+    ret = subprocess.run(['curl', '-o', download_filepath, url])
+    logger.info('{}: {}'.format(url, ret.returncode))
+    while ret.returncode == 0:
+        with open(download_filepath, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        xroot = html.document_fromstring(bytes(html_content, encoding='utf-8'))
+
+        next_obj = xroot.find_class('novelview_pager-next')[0]
+        if next_obj is None or next_obj.tag != 'a':
+            ret_val = 0
+            break
+
+        file_index += 1
+        download_filepath = os.path.join(download_path, subdir, f'index{file_index}.html')
+        href = next_obj.get('href')
+        url = f'https://ncode.syosetu.com{href}'
+        ret = subprocess.run(['curl', '-o', download_filepath, url])
+        logger.info('{}: {}'.format(url, ret.returncode))
 
     return ret_val
 
@@ -221,18 +241,8 @@ def download_subs(download_path, subdir, base, subtitles):
         if not url.endswith('/'):
             url += '/'
         logger.debug('URL: {}'.format(url))
-        req = urllib.request.Request(url)
-        try:
-            with urllib.request.urlopen(req) as res:
-                body = res.read()
-                with open(filename, 'wb') as f:
-                    f.write(bytes(body))
-        except urllib.error.HTTPError as err:
-            logger.error('download_subs: HTTPError, {}'.format(err.code))
-        except urllib.error.URLError as err:
-            logger.error('download_subs: URLError, {}'.format(err.reason))
-        except OSError as err:
-            logger.error('download_subs: OSError, {}'.format(err.strerror))
+        ret = subprocess.run(['curl', '-o', filename, url])
+        logger.info('{}: {}'.format(url, ret.returncode))
         time.sleep(random.uniform(0.5, 1.5))
 
 def set_logger(newlogger):
