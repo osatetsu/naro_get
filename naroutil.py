@@ -10,6 +10,7 @@
 
 import os
 import argparse
+import urllib.parse
 import time
 import random
 from logging import getLogger, DEBUG, INFO, ERROR
