@@ -3,6 +3,7 @@
 *.old
 *.orig
 *.pyc
+*.toml
 download/
 work/
 temp/

@@ -210,7 +210,7 @@ def download_main(download_path, subdir, base):
     if not url.endswith('/'):
         url += '/'
     logger.debug('URL: {}'.format(url))
-    ret = subprocess.run(['curl', '-o', download_filepath, url])
+    ret = subprocess.run(['curl', '--silent', '-o', download_filepath, url])
     logger.info('{}: {}'.format(url, ret.returncode))
     while ret.returncode == 0:
         with open(download_filepath, 'r', encoding='utf-8') as f:
@@ -226,7 +226,7 @@ def download_main(download_path, subdir, base):
         download_filepath = os.path.join(download_path, subdir, f'index{file_index}.html')
         href = next_obj.get('href')
         url = f'https://ncode.syosetu.com{href}'
-        ret = subprocess.run(['curl', '-o', download_filepath, url])
+        ret = subprocess.run(['curl', '--silent', '-o', download_filepath, url])
         logger.info('{}: {}'.format(url, ret.returncode))
 
     return ret_val
@@ -242,7 +242,7 @@ def download_subs(download_path, subdir, base, subtitles):
         if not url.endswith('/'):
             url += '/'
         logger.debug('URL: {}'.format(url))
-        ret = subprocess.run(['curl', '-o', filename, url])
+        ret = subprocess.run(['curl', '--silent', '-o', filename, url])
         logger.info('{}: {}'.format(url, ret.returncode))
         time.sleep(random.uniform(0.5, 1.5))
 
